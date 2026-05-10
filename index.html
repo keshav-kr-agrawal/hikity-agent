@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Vantage Scout</title>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="brand">
+    <span class="brand-icon">🔭</span>
+    <div><div class="brand-name">Vantage Scout</div><div class="brand-tag">Lead Intelligence</div></div>
+  </div>
+  <nav class="sidenav">
+    <a class="nav-item active" data-tab="dashboard">📊 <span>Dashboard</span></a>
+    <a class="nav-item" data-tab="leads">🎯 <span>Leads</span></a>
+    <a class="nav-item" data-tab="outreach">💬 <span>Outreach</span></a>
+    <a class="nav-item" data-tab="scout">🗺 <span>Scout</span></a>
+    <a class="nav-item" data-tab="profile">👤 <span>My Profile</span></a>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="agent-badge">⚡ AI Active</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main-wrap">
+
+  <!-- TOP BAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="page-title" id="page-title">Dashboard</h1>
+      <span class="page-sub" id="page-sub">Overview of your pipeline</span>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-ghost btn-sm" onclick="App.refresh()">↻ Sync</button>
+      <button class="btn btn-primary btn-sm" onclick="App.generateAll()">✦ Generate All Pitches</button>
+      <button class="btn btn-on" id="pipeline-toggle" onclick="App.togglePipeline()">⏵ START</button>
+      <div class="avatar" title="Profile">K</div>
+    </div>
+  </header>
+
+  <!-- ── TAB: DASHBOARD ── -->
+  <section class="tab-content active" id="tab-dashboard">
+
+    <!-- KPI STRIP -->
+    <div class="kpi-strip">
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:linear-gradient(135deg,#9B87D8,#6C5AB5)">🎯</div>
+        <div><div class="kpi-val" id="k-leads">—</div><div class="kpi-label">Total Leads</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:linear-gradient(135deg,#43C59E,#2E9B78)">💬</div>
+        <div><div class="kpi-val" id="k-pitched">—</div><div class="kpi-label">Pitched</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:linear-gradient(135deg,#F4A261,#E76F51)">📅</div>
+        <div><div class="kpi-val" id="k-meetings">—</div><div class="kpi-label">Meetings</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:linear-gradient(135deg,#E9C46A,#F4A261)">₹</div>
+        <div><div class="kpi-val" id="k-revenue">—</div><div class="kpi-label">Revenue (₹)</div></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon" style="background:linear-gradient(135deg,#C4B5F4,#9B87D8)">📈</div>
+        <div><div class="kpi-val" id="k-rate">—</div><div class="kpi-label">Conv. Rate</div></div>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 1 -->
+    <div class="chart-row">
+      <div class="chart-card wide">
+        <div class="chart-title">Outreach Activity — Last 7 Days</div>
+        <canvas id="chart-activity" height="90"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Lead Status</div>
+        <canvas id="chart-status" height="180"></canvas>
+      </div>
+    </div>
+
+    <!-- CHARTS ROW 2 -->
+    <div class="chart-row">
+      <div class="chart-card">
+        <div class="chart-title">Conversion Funnel</div>
+        <canvas id="chart-funnel" height="160"></canvas>
+      </div>
+      <div class="chart-card wide">
+        <div class="chart-title">Revenue Pipeline (₹)</div>
+        <canvas id="chart-revenue" height="90"></canvas>
+      </div>
+    </div>
+
+    <!-- QUICK LOG -->
+    <div class="chart-card" style="margin-top:0">
+      <div class="chart-title" style="margin-bottom:14px">📋 Log Activity</div>
+      <div class="log-row">
+        <select id="log-type" class="inp-sm">
+          <option value="meeting">Meeting Booked</option>
+          <option value="revenue">Revenue Closed</option>
+          <option value="call">Call Made</option>
+        </select>
+        <input id="log-val" type="number" class="inp-sm" placeholder="Amount (₹) or count" min="0"/>
+        <input id="log-note" type="text" class="inp-sm" placeholder="Note (optional)"/>
+        <button class="btn btn-primary btn-sm" onclick="App.logActivity()">+ Log</button>
+      </div>
+      <div id="activity-log" class="activity-list"></div>
+    </div>
+
+  </section>
+
+  <!-- ── TAB: LEADS ── -->
+  <section class="tab-content" id="tab-leads">
+    <div class="toolbar">
+      <input id="lead-search" class="inp-sm" placeholder="🔍  Search leads…" oninput="App.filterLeads(this.value)" style="width:240px"/>
+      <select id="lead-filter" class="inp-sm" onchange="App.filterLeads()">
+        <option value="">All Status</option>
+        <option value="New">New</option>
+        <option value="Pitched">Pitched</option>
+        <option value="Interested">Interested</option>
+        <option value="Meeting">Meeting</option>
+        <option value="Closed">Closed</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="App.showAddLead()">+ Add Lead</button>
+    </div>
+    <div class="leads-grid" id="leads-grid"></div>
+  </section>
+
+  <!-- ── TAB: OUTREACH / WHATSAPP ── -->
+  <section class="tab-content" id="tab-outreach">
+    <div class="outreach-wrap">
+
+      <!-- CONTACT LIST -->
+      <div class="contact-panel">
+        <div class="panel-title">Contacts</div>
+        <input class="inp-sm" placeholder="Search…" oninput="App.filterContacts(this.value)" style="margin-bottom:12px;width:100%"/>
+        <div id="contact-list"></div>
+      </div>
+
+      <!-- COMPOSE PANEL -->
+      <div class="compose-panel">
+        <div class="compose-header">
+          <div>
+            <div class="compose-name" id="compose-name">Select a contact →</div>
+            <div class="compose-phone" id="compose-phone"></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-draft btn-sm" onclick="App.generatePitchForSelected()">✦ AI Draft</button>
+            <select id="ai-provider" class="inp-sm">
+              <option value="groq">Groq</option>
+              <option value="anakin">Anakin</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="message-history" id="message-history">
+          <div class="history-empty">Select a lead to view conversation.</div>
+        </div>
+
+        <div class="compose-box">
+          <textarea id="compose-msg" class="compose-textarea" placeholder="Type or AI-generate your message…" rows="4"></textarea>
+          <div class="compose-actions" style="justify-content: space-between; align-items: center;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:0.75rem;color:var(--muted);cursor:pointer" title="Sends message in background (requires official API config)">
+              <input type="checkbox" id="auto-send" /> Auto-Send directly
+            </label>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="App.clearCompose()">✕ Clear</button>
+              <button class="btn btn-wa" onclick="App.sendWhatsApp()" id="send-wa-btn">💬 Send Message</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TEMPLATES -->
+        <div class="template-strip">
+          <span class="template-label">Templates:</span>
+          <button class="tmpl-btn" onclick="App.useTemplate('intro')">Intro</button>
+          <button class="tmpl-btn" onclick="App.useTemplate('followup')">Follow-up</button>
+          <button class="tmpl-btn" onclick="App.useTemplate('value')">Value Pitch</button>
+          <button class="tmpl-btn" onclick="App.useTemplate('meeting')">Book Meeting</button>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── TAB: SCOUT ── -->
+  <section class="tab-content" id="tab-scout">
+    <div class="scout-wrap">
+      <div class="chart-card">
+        <div class="chart-title">🗺 Coverage Map — Bengaluru</div>
+        <div id="scout-map" style="height:380px;border-radius:12px;overflow:hidden;margin-top:12px"></div>
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="App.openGoogleMaps()">🔍 Search on Google Maps</button>
+          <button class="btn btn-draft btn-sm" onclick="App.showScoutConfig()">⚙ Scout Settings</button>
+        </div>
+      </div>
+      <div class="chart-card" style="margin-top:24px">
+        <div class="chart-title">Scout Configuration</div>
+        <div class="form-grid" id="scout-config-form">
+          <div class="form-group">
+            <label>Target Niche</label>
+            <select id="s-niche" class="inp-sm" style="width:100%">
+              <option>Cafes</option><option>Restaurants</option><option>Retail Shops</option>
+              <option>Salons</option><option>Gyms</option><option>Boutiques</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>City / Area</label>
+            <input id="s-area" class="inp-sm" value="Bengaluru" style="width:100%"/>
+          </div>
+          <div class="form-group">
+            <label>Neighbourhood</label>
+            <input id="s-zone" class="inp-sm" placeholder="e.g. Koramangala, Indiranagar" style="width:100%"/>
+          </div>
+          <div class="form-group">
+            <label>Filter: No Website Only</label>
+            <select id="s-nosite" class="inp-sm" style="width:100%">
+              <option value="yes">Yes — only no-website leads</option>
+              <option value="no">No — all businesses</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px;align-items:center;flex-wrap:wrap">
+          <label style="font-size:.78rem;color:var(--muted);font-weight:600">Leads to generate:</label>
+          <select id="s-count" class="inp-sm" style="width:80px">
+            <option value="2">2</option><option value="3">3</option>
+            <option value="5" selected>5</option><option value="8">8</option><option value="10">10</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="btn-scout-ai" onclick="App.startPipeline()">🤖 Auto-Scout + Pitch</button>
+          <button class="btn btn-ghost btn-sm" onclick="App.openGoogleMaps()">🔍 Google Maps</button>
+        </div>
+        <div id="pipeline-log" style="margin-top:16px;background:var(--ivory);border:1px solid var(--ivory-d);border-radius:10px;padding:12px;font-size:.75rem;font-family:monospace;color:var(--text);max-height:200px;overflow-y:auto;display:none"></div>
+        <div style="margin-top:20px">
+          <div class="chart-title" style="margin-bottom:10px">➕ Manually Add Lead</div>
+          <div class="form-grid">
+            <input id="ml-name"   class="inp-sm" placeholder="Business Name" style="width:100%"/>
+            <input id="ml-phone"  class="inp-sm" placeholder="Phone Number"  style="width:100%"/>
+            <input id="ml-rating" class="inp-sm" placeholder="Rating (e.g. 4.5 (200 reviews))" style="width:100%"/>
+            <select id="ml-status" class="inp-sm" style="width:100%">
+              <option>New</option><option>Pitched</option><option>Interested</option><option>Meeting</option><option>Closed</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="App.addManualLead()">Save Lead</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAB: PROFILE ── -->
+  <section class="tab-content" id="tab-profile">
+    <div class="profile-wrap">
+      <div class="chart-card">
+        <div class="chart-title">👤 Agency Profile</div>
+        <div class="form-grid" style="margin-top:16px">
+          <div class="form-group"><label>Agency / Your Name</label><input id="p-name" class="inp-sm" placeholder="e.g. Keshav Creative Studio" style="width:100%"/></div>
+          <div class="form-group"><label>Your Role</label><input id="p-role" class="inp-sm" placeholder="e.g. Web Designer & Developer" style="width:100%"/></div>
+          <div class="form-group"><label>Experience</label><input id="p-exp" class="inp-sm" placeholder="e.g. 3 years" style="width:100%"/></div>
+          <div class="form-group"><label>Location</label><input id="p-loc" class="inp-sm" placeholder="e.g. Bengaluru, Karnataka" style="width:100%"/></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Services Offered</label><input id="p-services" class="inp-sm" placeholder="e.g. Website Design, SEO, Branding, Social Media" style="width:100%"/></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Target Audience</label><input id="p-audience" class="inp-sm" placeholder="e.g. Local cafes, restaurants, retail shops in Bengaluru" style="width:100%"/></div>
+          <div class="form-group"><label>Portfolio URL</label><input id="p-portfolio" class="inp-sm" placeholder="https://yourportfolio.com" style="width:100%"/></div>
+          <div class="form-group"><label>Your WhatsApp Number</label><input id="p-wa" class="inp-sm" placeholder="+91XXXXXXXXXX" style="width:100%"/></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Unique Value Proposition (UVP)</label><textarea id="p-uvp" class="inp-sm" rows="3" placeholder="e.g. We help local Bengaluru businesses get their first professional website in 7 days, affordable pricing, full support." style="width:100%;resize:vertical"></textarea></div>
+          <div class="form-group" style="grid-column:1/-1"><label>Monthly Revenue Target (₹)</label><input id="p-target" class="inp-sm" type="number" placeholder="e.g. 50000" style="width:100%"/></div>
+        </div>
+        <button class="btn btn-primary btn-sm" style="margin-top:20px" onclick="App.saveProfile()">💾 Save Profile</button>
+      </div>
+    </div>
+  </section>
+
+</div><!-- /main-wrap -->
+
+<!-- ADD LEAD MODAL -->
+<div class="modal-overlay" id="modal-lead" style="display:none">
+  <div class="modal">
+    <div class="modal-title">Add New Lead</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Business Name*</label><input id="m-name" class="inp-sm" style="width:100%"/></div>
+      <div class="form-group"><label>Phone*</label><input id="m-phone" class="inp-sm" style="width:100%"/></div>
+      <div class="form-group"><label>Rating</label><input id="m-rating" class="inp-sm" placeholder="4.5 (200 reviews)" style="width:100%"/></div>
+      <div class="form-group"><label>Status</label>
+        <select id="m-status" class="inp-sm" style="width:100%">
+          <option>New</option><option>Pitched</option><option>Interested</option><option>Meeting</option><option>Closed</option>
+        </select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:20px;justify-content:flex-end">
+      <button class="btn btn-ghost btn-sm" onclick="App.closeModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="App.saveLead()">Save Lead</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
